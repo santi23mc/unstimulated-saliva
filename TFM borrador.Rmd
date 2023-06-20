@@ -1,0 +1,1602 @@
+---
+title: "TFM"
+author: "Santiago Agustín Morán Cabrea"
+date: "2023-03-27"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+```{r cars}
+library(tidyverse)
+library(tidymodels)
+library(readxl)
+
+datas.original<-read_excel("C:/Users/santi/Desktop/máster madrid/TFM/prueba1.xlsx")
+```
+
+# Análisis descriptivo
+
+```{r}
+library(skimr)
+
+glimpse(datas.original)
+datas.original |> skim()
+```
+## Convertimos los datos correctamente a numéricos y no numéricos
+
+```{r}
+datos <- datas.original %>%
+  mutate_at(vars(-`S no est (ml/min`, -`Edad (años)`, -`Nº de fcos`, -`Nº enfermedades sistemicas`), as.character)
+
+datos.final <-
+  datos |> 
+  mutate(Edad = `Edad (años)`) |> 
+  mutate(Saliva_ml_min = `S no est (ml/min`) |> 
+  select(-`hiposialia no est`,-`Edad (años)`,-`S no est (ml/min`,-`Nº de Paciente`, 
+         -`5A40.Z Prediabetes`, -`A10B C`, - `A10BC01`, - `G03CA04`, - `J04AA02`)
+
+glimpse(datos.final)    
+```
+## Gráfico de la variable objetivo
+
+```{r}
+objetivo <- datos.final$Saliva_ml_min
+
+ggplot(data.frame(valor = objetivo), aes(x = valor)) + 
+  geom_histogram(bins = 20, fill = "blue", color = "white") + 
+  labs(title = "Histograma de nivel de saliva")
+```
+
+
+
+## Compramos ausentes
+
+```{r}
+sum(is.na(datos.final))
+```
+
+## Outliers
+
+```{r}
+library(reshape2)
+library(ggplot2)
+
+ggplot(melt(datos.final), aes(variable, value)) +
+  geom_boxplot() +
+  ggtitle("Boxplot de todas las variables")
+```
+
+Nombramos las variables separandolas por numericas y no numéricas para poder hacer una reducción de las variables por frecuencia.
+
+```{r}
+dput(names(datos.final))
+
+
+listclass <- c("Sexo", "1: Certain infectious or parasitic diseases", 
+               "1E51.0Z Chronic hepatitis B, unspecified 89", "1E51.1 Chronic viral Hepatitis c  ( 49)", 
+               "1E91.Z Zoster, unspecified (119)", "2: Neoplasms", "2A20.4 Polycythaemia vera 7", 
+               "2A82.00 Chronic lymphocytic leukaemia of B-cell type 100", "2B67.Z Malignant neoplasms of parotid gland, unspecified 128", 
+               "2C6Z Malignant neoplasms of breast unspecified. (38) (cancer de mama)", 
+               "2C12.0 Malignant neoplasm of liver 18", "2B90.Z Malignant neoplasms of colon, unspecified  19",
+               "2E86.0 Leiomyoma of uterus", "2F00.Y Other specified benign neoplasm of middle ear or respiratory system . Lung Harmatoma 64", 
+               "2F21.0 Seborrhoeic keratosis 120", "2F23.0 Dermatofibroma 127", 
+               "2F37.Y Other specified benign neoplasm of endocrine glands:  Adrenal adenoma  130", 
+               "3: Diseases of the blood or blood-forming organs . Diseases of inmune system", 
+               "3A00.0Z Acquired iron deficiency anaemia due to blood loss, unspecified 30/94", 
+               "3A01.30 Pernicious anaemia  81", "3B64.Z Thrombocytopenia, unspecified 44", 
+               "05: Endocrine, nutricional or metabolic diseases", "5A00.0Z Congenital Hypothyroidism unspecified. 135", 
+               "5A01.1 Nontoxic single thyroid nodule  123", "5A01.Z Nontoxic goitre, unspecified 122", 
+               "5A02.Z thyrotoxicosis unspecified . Hyperthyroidism 134", "5A10/ 5A11 Diabetes Mellitus 133", 
+               "5A74.Z Adrenocortical insufficiency, unspecified  108", 
+               "5B57.Z Vitamine D deficiency unspecified 72", "5B81.Z Obesity, unspecified 79", 
+               "5C55.Y Other specified inborn error of purine, pryrimidine or nucleotide metabolism Hyperuricemia  4", 
+               "5C61.6 Lactose intolerance", "5C80.0Z Hypercholesterolemia, unspecified (1)", 
+               "06: Mental, behavioural or neurodevelopmental disorders", "6A6Z Bipolar or related disorders, unspecified 34", 
+               "6A71.Z Recurrent depressive disorder, unspecified 25", "6A20.Z Schizophrenia, unspecified 51", 
+               "6B0Z Anxiety or fear- related disorders, unspecified 3", "6C20.Z Bodily distress disorder, unspecified 77", 
+               "6C40.2Z Alcohol dependence, unspecified 6", "07: Sleep – wake disorders", 
+               "7 A0Z Insomnia disorder, unspecified  74", "7A41 Obstructive Sleep apnoea 45", 
+               "08 Diseases of nervous system", "8A00.0 Parkinson`s disease 5", 
+               "8A04.3Z Secondary tremor, unspecified 70", "8 A60.Z Epilepsy due to unspecified structural or metabolic condition or disease 32", 
+               "8A80.Z Migraine, unspecified  41", "8B11.5Z Cerebral ischaemic stroke, unspecified 62", 
+               "8B22.1 Cerebral venous thrombosis 54", "8B22.5 Cerebral aneurysm, nonruptured 125", 
+               "8MB48.Z Dizziness and giddiness, unspecified", "8B82 Disorders of trigeminal nerve", 
+               "8B88 Disorders of facial nerve 60", "8B8Z Neuropathy", "8C60 Myasthenia gravis 53", 
+               "09 Diseases of the visual system", "9A01.3 Infectious blepharitis 78", 
+               "9A7Y Other specified disorders of the cornea.  Keratitis 129", 
+               "9A11.2 Dacryocystitis 66", "9A60.02 Allergic conjunctivitis 14", 
+               "9B8Y Other specified disorders of the vitreous body.  Vitreous detachment 115", 
+               "9B10.0Z Age-related cataract, unspecified 57", "9B75.0Z Age related macular degeneration, unspecified 124", 
+               "9C61.Z Glaucoma, unspecified  40", "9D00.0 Myopia 110", "9D0Z Disorders of refraction or accommodation, unspecified  93", 
+               "9D45 Photophobia", "10 Diseases of the ear or mastoid process", 
+               "10AB31.7 Vertiginous syndromes  12", "10AB52 Deafness not otherwise specified  (sordera) 67", 
+               "11 Diseases of circulatory system", "11BA00Z Essential Hypertension, unspecified", 
+               "11BA5Z Chronic ischaemic heart disease, unspecified  46", "11BA40.Z Angina pectoris, unspecified 11 (angina de pecho)", 
+               "11BA41.Z Acute myocardial infarction, unspecified   37", "11BA5Z Chronic ischaemic heart disease, unspecified 42", 
+               "11BA84 Chronic total occlusion of coronary artery 23", "11BB62.Z Mitral valve prolapse, unspecified 97", 
+               "11BB2Z Pericarditis, unspecified", "11BC43.1Y Other specified hypertrophic cardiomyopathy.  Ventricular hypertrophy 104", 
+               "11BC63.Z Conduction disorders, unspecified.  Heart block 103", 
+               "11BC81 Supraventricular tachyarrhythmia   35", "11BC65Z Cardiac arrhythmia associated with genetic disorder, unspecified  43", 
+               "11BD10Z Congestive heart failure, unspecified  2", "11BD40.00 Lower limb atherosclerosis with intermittent claudication 106", 
+               "11BD42.Z Raynaud phenomenon, unspecified 105", "11BD50Z Aortic Aneurysm or dissection, unspecified 47", 
+               "11BD70.0 Superficial thrombophlebitis of lower limbs  111", 
+               "11BD74.Z Cronic Peripheral venous insufficiency of lower extremities, unspecified  76", 
+               "12 Diseases of respiratory system", "12CA09.Z Cronic Rhinitis, nasopharyngitisor pharyngitis, unspecified 29", 
+               "12CA03.Z Tonsils", "12CA0Z.F Chronic adenoid disease", "12CA0J.Z Nasal polyp, unspecified 59", 
+               "12CA20.Z Bronchitis", "12CA22.Z Chronic obstructive pulmonary disease, unspecified  26", 
+               "12CA23.0Z Allergic asthma, unspecified  28", "12CB01.Z Pulmonary oedema", 
+               "12CB41.2Z Respiratory failure, unspecified 55", "12.7A41Obstructive sleep apnoea", 
+               "13 Diseases of digestive system", "13DA01.00 Leukoplakia", "13DA04.2 Sialoadenitis 121", 
+               "13DA0F.0 Burning Mouth Syndrome", "13DA22.0 Non-erosive gastro-oesophageal reflux 27", 
+               "13DA42.5 Gastritis due to duodenogastric reflux 15", "13DA60.Z Gastric ulcer, unspecified 109", 
+               "13DA63 Duodenal ulcers", "13DA98 Polyps of small intestine", 
+               "13DC10.Y Other specified acquired anatomical alterations of gallbladder or bile ducts 101", 
+               "13 DC11. Y  Hepatic stenosis 67", "13DC11.Z Cholelithiasis, unspecified 131", 
+               "13DD01.Z Diverticulosis of unspecified part of intestine, unspecified 48", 
+               "13DD71.Z Ulcerative colitis, unspecified 17", "13DD50.0 Diaphragmatic hernia  22", 
+               "13DD51 Inguinal hernia 33", "13DD70 Crohn disease", "13DD91.0Z Irritable bowel syndrome, type unspecified 107", 
+               "13DB93.2 Certain specified fibrosis or cirrhosis of liver", 
+               "13.EA91.40 Non-erosive oral lichen planus", "13.EA91.41 Erosive oral lichen planis", 
+               "14  Diseases of the skin", "14EA81.Z Seborrhoeic dermatitis, unspecified 114", 
+               "14EA90.Z Psoriasis of unspecified type 52", "14EB41.Y Other specified pemphigoid 31", 
+               "14EB60.Y Lichen sclerosus of vulva", "14ED90.0 Rosacea", "15 Diseases of musculoskeletal system or connective tissue", 
+               "15FA0Z Osteoarthritis, unspecified:  Heberden nodules 132", 
+               "15FA01.Z Osteoarthritis of knee, unspecified.  Gonarthrosis 118", 
+               "15FA20.Z Rheumatoid arthristis, serology unspecified 16", "15FA25.0 Primary Gout 24", 
+               "15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10", "15FB55.1 Lateral epicondylitis of elbow 116", 
+               "15FB81.Z Avascular necrosis", "15FB82.Z Chondromalacia", "15FB83.11 Postmenopausal osteoporosis 8", 
+               "15FB83.OZ Osteopenia unspecified  80", "16      Diseases of the genitourinary system", 
+               "16GB60 Acute kidney failure 98", "16GB61 Chronic kidney disease  56", 
+               "16GB61.Z Chronic kidney disease, stage unspecified.  Diabetic nephropathy 126", 
+               "16GB7Z Urolithiasis, unspecified  90", "16GC01.Y Other specified disorders of bladder 54", 
+               "16GC01.4 Neuromuscular dysfunction of bladder, not elsewhere classified 117", 
+               "16GC08.Z Urinary tract infection, site and agent not specified 113", 
+               "16GA91.Z Inflammatory and other diseases of prostate, unspecified  9 ( hiperplasia benigna de próstata.", 
+               "21 Symptoms, signs or clinical findings not elsewhere classified", 
+               "21MC83.0 Benign and innocent cardiac murmurs 21", "21MB21.0 Age-associated cognitive decline 87", 
+               "MB24.3 Anxiety", "21MB41.0 Anosmia 90", "21MD11.5 Dyspnoea 73", 
+               "21ME10.1 Unspecified jaundice . 65", "21 ME84.2Z Low back pain, unspecified  75", 
+               "21 ME84.3 Sciatica 71", "21 ME93.43 Intervertebral disc stenosis of neural canal, lumbar region 61", 
+               "21MG30.01 Chronic widespread pain 36", "A: SISTEMA DIGESTIVO Y METABOLISMO", 
+               "A02", "A02AD 03", "A02B", "A02BA 02", "A02B C", "A02BC 01", 
+               "A02BC02", "A02BC 03", "A02BC04", "A02BC05", "A02BD", "A02BD04", 
+               "A02BD 05", "A02BX", "A02BXM1", "A03", "A03 F", "A03F A", "A03FA 03", 
+               "A03FA 06", "A04 ADM3", "A05 AA 02", "A10", "A10 A", "A10A B", 
+               "A10AB  01", "A10AB  04", "A10AB 06", "A10A E", "A10AE 01", "A10AE 04", 
+               "A10AE05", "A10AE06", "A10B", "A10BA", "A10BA02", "A10B B", "A10BB 09", 
+               "A10B D", "A10BD 07", "A10BD08", "A10BD11", 
+               "A10BD 13", "A10BH", "A10BH01", "A10BH02", "A10BH03", "A10BH05", 
+               "A10B K", "A10BK01", "A10BK02", "A10BK 03", "A10 BK01", "A10BX", 
+               "A10BX02", "A10BX09", "A10BX12", "A11", "A11C", "A11C C", "A11CC05", 
+               "A11CC 06", "A11DB", "A11HA05", "A12", "A12 A", "A12A A", "A12AA 01", 
+               "A12AA 04", "A12AA 13", "A12AA M2", "A12AX P1", "A12B", "A12B A", 
+               "A12BA 04", "A12BA 51", "A16AA05", "A12AX", "B: SANGRE Y ÓRGANOS HEMATOPOYÉTICOS", 
+               "B01", "B01A", "B01AA 07", "B01AB11", "B01A C", "B01AC 04", "B01AC 06", 
+               "B01AC24", "B01AE07", "B01A F", "B01AF 01", "B01AF02", "B01AX 06", 
+               "B03", "B03 A", "B03A A", "B03AA 01", "B03AA07", "B03AB09", "B03AC02", 
+               "B03AD03", "B03 B", "B03B A", "B03BA01", "B03BA02", "B03BB01", 
+               "C: SISTEMA CARDIOVASCULAR", "C01", "C01A", "C01A A", "C01AA 02", 
+               "C01AA 05", "C01AA08", "C01 B", "C01B C", "C01B C 04", "C01B D", 
+               "C01BD 01", "C01D", "C01D A", "C01DA 02", "C01DA52", "C01 EB15", 
+               "C02", "C02C", "C02C A", "C02CA04", "C03", "C03A", "C03AA", "C03AA03", 
+               "C03A B", "C03AB03", "C03AB04", "C03BA11", "C03 C", "C03C A", 
+               "C03CA 01", "C03CA 04", "C03 D", "C03D A", "C03DA01", "C03DA 04", 
+               "C03 E", "C03E A", "C03EA 01", "C03E B", "C03EB01", "C04", "C04A", 
+               "C04AD03", "C04AX21", "C05", "C05 C", "C05 CA", "C05 CA01", "C07", 
+               "C07 A", "C07A A", "C07AA05", "C07AA 06", "C07A B", "C07AB 02", 
+               "C07AB 03", "C07AB07", "C07AB12", "C07A G", "C07AG02", "C07B", 
+               "C07B A", "C07BA 05", "C07B B", "C07BB 07", "C07BB 12", "C07BB52", 
+               "C07C", "C07C B", "C07CB 03", "C07FB03", "C08", "C08C", "C08C A", 
+               "C08CA01", "C08CA02", "C08CA05", "C08CA 06", "C08CA 11", "C08CA 13", 
+               "C08 D", "C08D A", "C8DA 01", "C08D B", "C08DB 01", "C09", "C09A", 
+               "C09A A", "C09AA 01", "C09AA02", "C09AA 03", "C09AA 04", "C09AA05", 
+               "C09AA 10", "C09AA 16", "C09B", "C09B A", "C09BA02", "C09BA 03", 
+               "C09BA04", "C09BA05", "C09BA07", "C09B B", "C09BB 03", "C09BB 04", 
+               "C09BB06", "C09 C", "C09CA", "C09CA 01", "C09CA03", "C09CA 04", 
+               "C09CA 06", "C09CA07", "C09CA08", "C09D", "C09D A", "C09DA 01", 
+               "C09DA03", "C09DA04", "C09DA 06", "C09DA 07", "C09DA 08", "C09D B", 
+               "C09DB 01", "C09DB 02", "C09DB06", "C09D X", "C09DX 01", "C09DX 03", 
+               "C10", "C10 A", "C10A A", "C10AA 01", "C10AA02", "C10AA 03", 
+               "C10AA 04", "C10AA 05", "C10AA 07", "C10AA08", "C10A B", "C10AB 04", 
+               "C10AB 05", "C10A X", "C10AX 09", "C10 B", "C10B A", "C10BA 02", 
+               "C10BA05", "C10BA 06", "C10B X03", "C10B X09", "D:MEDICAMENTOS DERMATOLÓGICOS", 
+               "D01", "D01 A", "D01 AE", "D01AE 14", "D01AE 15", "D06BB10", 
+               "D03", "D03 AX 05", "D07", "D07 A", "D07 AC", "D07AC01", "D07AC13", 
+               "D07AC 14", "D07AC16", "D07 AD01", "D07 CD01", "D07XA01", "D11", 
+               "D11 A", "D11AH01", "D11AX 18", "G: APARATO GENITOURINARIO Y HORMONAS SEXUALES", 
+               "G01AX 12", "G03BA02","G03XC 01", "G04", 
+               "G04BD 08", "G04C", "G04CA", "G04CA 02", "G04CA 04", "G04CA52", 
+               "G04CA 53", "G04CB01", "G04CX02", "G04BD", "G04BD8", "G04BD 12", 
+               "H: PREPARADOS HORMONALES SISTÉMICOS, EXCL. HORMONAS SEXUALES", 
+               "H02", "H02A", "H02AB", "H02AB 06", "H02AB07", "H03AA 01", "H05AA02", 
+               "J: ANTIINFECCIOSOS EN GENERAL PARA USO SISTEMICO \r\n", "J01", 
+               "J01AA02", "J01F A09", "J01MA02","L: \r\nAGENTES ANTINEOPLÁSICOS E IMUNOMODULADORES", 
+               "L01XX05", "L02BG04", "L04AX01", "M: SISTEMA MUSCULOESQUELÉTICO", 
+               "M01", "M01A", "M01AE", "M01AE 01", "M01AE02", "M01AE 17", "M01AX", 
+               "M01AX05", "M01AX 25", "M01CXP1", "M03", "M03 B", "M03 BX", "M03 BX 02", 
+               "M04", "M04A", "M04AA", "M04AA 01", "M04AA03", "M05", "M05B", 
+               "M05BA", "M05BA 04", "M05BA06", "M05BA 07", "M05BB", "M05B X04", 
+               "N:SISTEMA NERVIOSO", "N01BB02", "N02", "N02 A", "N02A J", "N02AJ 06", 
+               "N02AJ 13", "N02AJ 15", "N02A X", "N02AX 05", "N02AX06", "N02AC 52", 
+               "N02 B", "N02B B", "N02BB 02", "N02B E", "N02BE 01", "N02B EF 02", 
+               "N02 C", "N02C A52P2", "N02C C", "N02CC 01", "N02CC 03", "N02CC 05", 
+               "N02BG91", "N03", "N03A", "N03A E01", "N03A X", "N03AX 12", "N03AX 14", 
+               "N03AX 16", "N03AX 18", "N03 AF", "N03AF 01", "N03AF 02", "N03AF 04", 
+               "N04", "N04A A 02", "N04B", "N04BA", "N04BA 02", "N04BC", "N04BC 05", 
+               "N05", "N05 A", "N05A H 04", "N05A L 05", "N05A X 12", "N05A X 16", 
+               "N05B", "N05BA", "N05BA 01", "N05BA05", "N05BA 06", "N05BA08", 
+               "N05BA12", "N05BA 21", "N05BA P4", "N05C", "N05C D", "N05CD 06", 
+               "N05CD 07", "N05C F02", "M05CH01", "N06", "N06A", "N06A A09", 
+               "N06AB", "N06AB 03", "N06AB 04", "N06AB 05", "N06AB 06", "N06AB10", 
+               "N06AX", "N06AX05", "N06AX09", "N06AX 11", "N06AX 23", "N06AX21", 
+               "N06 B", "N06B A 09", "N06 B X 06", "N07", "N07A", "N07AA", "N07AA 02", 
+               "N07C", "N07CA", "N07CA 01", "R: SISTEMA RESPIRATORIO", "R01", 
+               "R01A", "R01AD", "R01AD 09", "R01AD 12", "R03", "R03A", "R03AC", 
+               "R03AC 02", "R03AC 12", "R03AC 18", "R03AK", "R03AK06", "R03AK07", 
+               "R03AK08", "R03AK 10", "R03AL", "R03AL 04", "R03AL 08", "R03B", 
+               "R03BB", "R02BB 04", "R03CC", "R03D", "R03DC", "R03DC 03", "R05", 
+               "R05CB03", "R06", "R06A", "R06AE07", "R06AX", "R06AX 13", "R06AX 22", 
+               "R06AX27", "R06AX28", "R06AX 29", "S: ÓRGANOS DE LOS SENTIDOS", 
+               "S01", "S01A", "S01AA", "S01E", "S01ED", "S01ED01", "S01ED51P1", 
+               "S01ED51P2", "S01ED51P4", "S01ED51P6", "S01EE", "S01EE01", "S01EE 04", 
+               "S01G", "S01GX", "S01X", "S01XA20")
+
+listconti <- c("Edad", "Nº enfermedades sistemicas", "Nº de fcos")
+
+vardep <- "Saliva_ml_min"
+
+```
+## Estandarizamos y reducimos según su frecuencia
+
+```{r}
+library(dplyr)
+library(plyr)
+
+colnames(datos.final)
+
+datos.prueba<-datos.final[,c(listconti,listclass,vardep)]
+
+
+means <-apply(datos.final[,listconti],2,mean,na.rm=TRUE)
+sds<-sapply(datos.final[,listconti],sd,na.rm=TRUE)
+
+datos.final2<-scale(datos.final[,listconti], center = means, scale = sds)
+
+
+frecu<-ldply(datos.final[,listclass],function(x) t(rbind(names(table(x)),table(x))))
+names(frecu)<-c("variable","nivel","frecuencia")
+frecu$frecuencia<-as.numeric(frecu$frecuencia)
+
+frecu
+```
+
+```{r}
+frecu10 <- frecu[frecu$frecuencia<10,]
+listamal1<-dput(frecu10)
+
+
+
+datos.final[,unlist(listamal1)]<-NULL
+```
+
+Guardamos los datos nuevos 
+
+```{r}
+library(openxlsx)
+write.xlsx(datos.final, "/Users/santi/Desktop/máster madrid/TFM", sheetName = "Hoja1")
+```
+
+
+
+## Test de significación
+
+```{r}
+chisq <-
+  tibble("variable" = datos.final %>% select(where(is.character)) %>% names(),
+         "p_value" = datos.final %>% select(where(is.character)) %>%
+           map_dbl(.f = function(x) { chisq.test(datos.final$Saliva_ml_min, x)$p.value}))
+chisq %>% arrange(p_value)
+chisq %>% arrange(desc(p_value))
+```
+
+## Correlación variables numéricas
+
+```{r}
+library(corrplot)
+cor_matrix <- datos.final %>% select(where(is.numeric)) %>% cor() %>% round(2)
+cor_matrix
+
+cor_matrix %>%
+  corrplot(method = "number", tl.cex = 0.55, number.cex = 0.7, type = "lower")
+```
+
+
+##Convertimos las variables caracter en Entero
+
+```{r}
+datos.final <- datos.final |> 
+  mutate_at(vars(-Saliva_ml_min, -Edad, -`Nº de fcos`, -`Nº enfermedades sistemicas`), as.integer)
+```
+
+
+
+# Algoritmos de aprendizaje
+
+```{r}
+library(parallel)
+library(doParallel)
+library(randomForest)
+library(caret)
+library(gam)
+library(klaR)
+library(MASS)
+library(Boruta)
+library(MXM)
+library(plyr)
+
+GS_T0 <- Sys.time()
+cluster <- makeCluster(detectCores() - 1) # number of cores, convention to leave 1 core for OS
+registerDoParallel(cluster) # register the parallel processing
+
+```
+
+```{r}
+archivo1<-datos.final
+
+dput(names(datos.final))
+
+
+vardep<- "Saliva_ml_min"
+nombres1<- c("Sexo", "Nº enfermedades sistemicas", "Nº de fcos", 
+             "2: Neoplasms", "3: Diseases of the blood or blood-forming organs . Diseases of inmune system", 
+             "05: Endocrine, nutricional or metabolic diseases", "5A00.0Z Congenital Hypothyroidism unspecified. 135", 
+             "5A10/ 5A11 Diabetes Mellitus 133", "5B57.Z Vitamine D deficiency unspecified 72", 
+             "5C55.Y Other specified inborn error of purine, pryrimidine or nucleotide metabolism Hyperuricemia  4", 
+             "5C80.0Z Hypercholesterolemia, unspecified (1)", "06: Mental, behavioural or neurodevelopmental disorders", 
+             "6A71.Z Recurrent depressive disorder, unspecified 25", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+             "07: Sleep – wake disorders", "08 Diseases of nervous system", 
+             "09 Diseases of the visual system", "9B10.0Z Age-related cataract, unspecified 57", 
+             "10 Diseases of the ear or mastoid process", "11 Diseases of circulatory system", 
+             "11BA00Z Essential Hypertension, unspecified", "11BC81 Supraventricular tachyarrhythmia   35", 
+             "11BC65Z Cardiac arrhythmia associated with genetic disorder, unspecified  43", 
+             "11BD10Z Congestive heart failure, unspecified  2", "11BD74.Z Cronic Peripheral venous insufficiency of lower extremities, unspecified  76", 
+             "12 Diseases of respiratory system", "12CA23.0Z Allergic asthma, unspecified  28", 
+             "13 Diseases of digestive system", "13DA01.00 Leukoplakia", "13.EA91.40 Non-erosive oral lichen planus", 
+             "14  Diseases of the skin", "15 Diseases of musculoskeletal system or connective tissue", 
+             "15FA25.0 Primary Gout 24", "15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10", 
+             "15FB83.11 Postmenopausal osteoporosis 8", "16      Diseases of the genitourinary system", 
+             "16GA91.Z Inflammatory and other diseases of prostate, unspecified  9 ( hiperplasia benigna de próstata.", 
+             "21 Symptoms, signs or clinical findings not elsewhere classified", 
+             "A: SISTEMA DIGESTIVO Y METABOLISMO", "A02", "A02B", "A02B C", 
+             "A02BC 01", "A02BC02", "A10", "A10B", "A10BA", "A10BA02", "A10B D", 
+             "A10BD 07", "A11", "A11C", "A11C C", "A11CC05", "A11CC 06", "A12", 
+             "A12 A", "A12AX P1", "B: SANGRE Y ÓRGANOS HEMATOPOYÉTICOS", 
+             "B01", "B01A", "B01AA 07", "B01A C", "B01AC 06", "B03", "B03 B", 
+             "B03B A", "B03BA01", "C: SISTEMA CARDIOVASCULAR", "C01", "C02", 
+             "C02C", "C02C A", "C02CA04", "C03", "C03 C", "C03C A", "C03 E", 
+             "C03E B", "C03EB01", "C07", "C07 A", "C07A B", "C07AB 03", "C07AB07", 
+             "C07B", "C08", "C08C", "C08C A", "C08CA01", "C09", "C09A", "C09A A", 
+             "C09AA02", "C09AA 03", "C09B", "C09B A", "C09BA02", "C09BA 03", 
+             "C09 C", "C09CA", "C09CA 01", "C09D", "C09D A", "C09DA 08", "C09D B", 
+             "C09DB 01", "C09DB 02", "C09DB06", "C09D X", "C09DX 03", "C10", 
+             "C10 A", "C10A A", "C10AA 01", "C10AA 05", "C10AA 07", "C10 B", 
+             "C10B A", "D:MEDICAMENTOS DERMATOLÓGICOS", "G: APARATO GENITOURINARIO Y HORMONAS SEXUALES", 
+             "G04", "G04C", "G04CA", "G04CA 02", "H: PREPARADOS HORMONALES SISTÉMICOS, EXCL. HORMONAS SEXUALES", 
+             "H03AA 01", "M: SISTEMA MUSCULOESQUELÉTICO", "M01", "M01A", 
+             "M01AX", "M04", "M04A", "M04AA", "M04AA 01", "N:SISTEMA NERVIOSO", 
+             "N02", "N02 A", "N02A J", "N02 B", "N02B B", "N02BB 02", "N02B E", 
+             "N02BE 01", "N03", "N03A", "N03A X", "N05", "N05B", "N05BA", 
+             "N05BA 06", "N05BA08", "N05C", "N06", "N06A", "N06AB", "N06AB 06", 
+             "N06AX", "R: SISTEMA RESPIRATORIO", "R03", "R03A", "R06", "R06A", 
+             "R06AX", "S: ÓRGANOS DE LOS SENTIDOS", "S01", "S01E", "S01ED", 
+             "Edad")
+
+y<-archivo1[,vardep]
+x<-archivo1[,nombres1]
+y<- as.matrix(y)
+
+```
+
+
+## SBF
+
+```{r}
+filtro<-sbf(x,y,sbfControl = sbfControl(functions = rfSBF,
+                                        method = "cv", verbose = FALSE))
+
+a<-dput(filtro$optVariables)
+
+length(a)
+```
+
+## AIC
+
+```{r}
+full<-glm(Saliva_ml_min~.,data=archivo1,family = gaussian(link = "identity"))
+null<-glm(Saliva_ml_min~1,data=archivo1,family = gaussian(link = "identity"))
+
+selec1<-stepAIC(null,scope=list(upper=full),
+                direction="both",family = gaussian(link = "identity"),trace=FALSE)
+
+vec<-(names(selec1[[1]]))
+
+length(vec)
+
+dput(vec)
+
+```
+## BIC
+
+```{r}
+log(nrow(datos.final)) 
+
+full<-glm(Saliva_ml_min~.,data=archivo1,family = gaussian(link = "identity"))
+null<-glm(Saliva_ml_min~1,data=archivo1,family = gaussian(link = "identity"))
+
+
+selec1<-stepAIC(null,scope=list(upper=full),
+                direction="both",family = gaussian(link = "identity"),trace=FALSE, k=5.67)
+
+vec<-(names(selec1[[1]]))
+
+length(vec)
+
+dput(vec)
+```
+
+## Boruta
+
+```{r}
+out.boruta <- Boruta(Saliva_ml_min~., data = archivo1)
+
+print(out.boruta)
+
+summary(out.boruta)
+
+sal<-data.frame(out.boruta$finalDecision)
+
+sal2<-sal[which(sal$out.boruta.finalDecision=="Confirmed"),,drop=FALSE]
+dput(row.names(sal2))
+
+length(dput(row.names(sal2)))
+```
+# Partición de datos
+
+```{r}
+datos_split <- initial_split(datos.final, prop = 0.7, strata = Saliva_ml_min)
+
+datos_train <- training(datos_split)
+
+datos_test <- testing(datos_split)
+```
+
+
+## Random Forest
+
+```{r}
+set.seed(123)
+
+rfgrid<-expand.grid(mtry=c(1,5,10,25,50,75,90,100,110,125,150))
+
+control<-trainControl(method = "cv",number=4,savePredictions = "all") 
+
+rf<- train(Saliva_ml_min~.,data=datos_train,
+           method="rf",trControl=control,tuneGrid=rfgrid,
+           linout = T,ntree=500,nodesize=10,replace=TRUE,
+           importance=TRUE)
+
+rf
+
+
+```
+
+
+```{r}
+final<-rf$finalModel
+
+tabla<-as.data.frame(importance(final))
+tabla<-tabla[order(-tabla$IncNodePurity),]
+tabla
+
+
+barplot(tabla[,c(2)],names.arg=rownames(tabla))
+
+dput(rownames(tabla))
+
+```
+
+```{r}
+set.seed(123)
+
+rfgrid<-expand.grid(mtry=c(1,5,10,25,50,75,90,100,110,125,150))
+
+control<-trainControl(method = "cv",number=4,savePredictions = "all") 
+
+rf<- train(Saliva_ml_min~ `Nº de fcos` + `11BA00Z Essential Hypertension, unspecified` + `6B0Z Anxiety or fear- related disorders, unspecified 3` + A10 + A10BA + Edad,data=datos_train,
+           method="rf",trControl=control,tuneGrid=rfgrid,
+           linout = T,ntree=500,nodesize=10,replace=TRUE,
+           importance=TRUE)
+
+rf
+```
+
+```{r}
+final<-rf$finalModel
+
+tabla<-as.data.frame(importance(final))
+tabla<-tabla[order(-tabla$IncNodePurity),]
+tabla
+
+
+barplot(tabla[,c(2)],names.arg=rownames(tabla))
+
+dput(rownames(tabla))
+```
+
+
+## GBM
+
+```{r}
+set.seed(123)
+
+gbmgrid<-expand.grid(shrinkage=c(0.1),
+                     n.minobsinnode=c(10),
+                     n.trees=c(4,5,25,50,75,100,150,300,600,100,1500),
+                     interaction.depth=c(2))
+
+control<-trainControl(method = "cv",number=4,savePredictions = "all") 
+
+gbm<- train(Saliva_ml_min~.,data=datos_train,
+            method="gbm",trControl=control,tuneGrid=gbmgrid,
+            bag.fraction=1,verbose=FALSE)
+
+gbm
+plot(gbm)
+
+
+```
+
+```{r}
+par(cex=1.3)
+summary(gbm)
+
+tabla2<-summary(gbm)
+
+dput(rownames(tabla2))
+```
+
+```{r}
+set.seed(123)
+
+gbmgrid<-expand.grid(shrinkage=c(0.1),
+                     n.minobsinnode=c(10),
+                     n.trees=c(4,5,25,50,75,100,150,300,600,100,1500),
+                     interaction.depth=c(2))
+
+control<-trainControl(method = "cv",number=4,savePredictions = "all") 
+
+gbm<- train(Saliva_ml_min~`Nº de fcos` + `11BA00Z Essential Hypertension, unspecified` + `6B0Z Anxiety or fear- related disorders, unspecified 3` + A10 + A10BA + Edad,data=datos_train,
+            method="gbm",trControl=control,tuneGrid=gbmgrid,
+            bag.fraction=1,verbose=FALSE)
+
+gbm
+plot(gbm)
+```
+
+
+```{r}
+par(cex=1.3)
+summary(gbm)
+
+tabla2<-summary(gbm)
+
+dput(rownames(tabla2))
+```
+
+
+## Regresión lineal
+
+### Usando SBF
+
+```{r}
+
+modelosbf <- train(Saliva_ml_min ~ `Nº de fcos` + `5A10/ 5A11 Diabetes Mellitus 133` +
+`06: Mental, behavioural or neurodevelopmental disorders` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `11 Diseases of circulatory system` + 
+`11BA00Z Essential Hypertension, unspecified` + `13 Diseases of digestive system` + 
+`13DA01.00 Leukoplakia` + `13.EA91.40 Non-erosive oral lichen planus` + 
+`14  Diseases of the skin` + `15 Diseases of musculoskeletal system or connective tissue` + 
+`15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10` + `A: SISTEMA DIGESTIVO Y METABOLISMO` + 
+ A10 + A10B + `A10BD 07` + A12 + `A12 A` + `B01AA 07` + `C: SISTEMA CARDIOVASCULAR` + 
+ C07 + `C07 A` + C09 + `N:SISTEMA NERVIOSO` + N05B + R03A, data = datos_train, method = "lm")
+
+
+summary(modelosbf)
+summary(modelosbf)$r.squared
+
+
+
+```
+### Usando AIC
+
+```{r}
+
+modeloaic <- train(Saliva_ml_min ~ Edad + `14  Diseases of the skin` + A10 + 
+`15 Diseases of musculoskeletal system or connective tissue` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `13DA01.00 Leukoplakia` + R03A + C09B + R06 + `10 Diseases of the ear or mastoid process` + `C10 A` + `13.EA91.40 Non-erosive oral lichen planus` + N06AX + N06A + `B03 B` + C08C + `G04CA 02` + C07 + `A10BD 07` + `A10B D` + A10BA + G04 + Sexo, data = datos_train, method = "lm")
+
+
+summary(modeloaic)
+summary(modeloaic)$r.squared
+
+
+```
+### Usando BIC
+
+```{r}
+
+modelobic <- train(Saliva_ml_min ~ `14  Diseases of the skin` + A10 + 
+Edad + `15 Diseases of musculoskeletal system or connective tissue` + `6B0Z Anxiety or fear- related disorders, unspecified 3`, data = datos_train, method = "lm")
+
+
+summary(modelobic)
+summary(modelobic)$r.squared
+
+
+
+```
+### Usando Boruta
+
+```{r}
+
+modeloboruta <- train( Saliva_ml_min ~ `Nº de fcos` + `11BA00Z Essential Hypertension, unspecified` + `6B0Z Anxiety or fear- related disorders, unspecified 3` + A10 + A10BA + Edad, data = datos_train, method = "lm")
+
+
+summary(modeloboruta)
+summary(modeloboruta)$r.squared
+
+```
+
+
+## Support Vector Machine
+
+### Lineal
+
+```{r}
+library(e1071)
+
+set.seed(123)
+
+control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+
+SVMgrid<-expand.grid(C= c(5^c(-4:2),10))
+
+SVM<- train(Saliva_ml_min~.,data=datos_train,
+ method="svmLinear",trControl=control,
+ tuneGrid=SVMgrid,verbose=FALSE)
+
+print(SVM)
+```
+
+
+#### Usanndo SBF
+
+```{r}
+
+
+set.seed(123)
+
+control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+
+SVMgrid<-expand.grid(C= c(5^c(-4:2),10))
+
+SVM<- train(Saliva_ml_min~`Nº de fcos` + `5A10/ 5A11 Diabetes Mellitus 133` +
+`06: Mental, behavioural or neurodevelopmental disorders` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `11 Diseases of circulatory system` + 
+`11BA00Z Essential Hypertension, unspecified` + `13 Diseases of digestive system` + 
+`13DA01.00 Leukoplakia` + `13.EA91.40 Non-erosive oral lichen planus` + 
+`14  Diseases of the skin` + `15 Diseases of musculoskeletal system or connective tissue` + 
+`15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10` + `A: SISTEMA DIGESTIVO Y METABOLISMO` + 
+ A10 + A10B + `A10BD 07` + A12 + `A12 A` + `B01AA 07` + `C: SISTEMA CARDIOVASCULAR` + 
+ C07 + `C07 A` + C09 + `N:SISTEMA NERVIOSO` + N05B + R03A,data=datos_train,
+ method="svmLinear",trControl=control,
+ tuneGrid=SVMgrid,verbose=FALSE)
+
+print(SVM)
+```
+#### Usando AIC
+
+```{r}
+set.seed(123)
+
+control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+
+SVMgrid<-expand.grid(C= c(5^c(-4:2),10))
+
+SVM<- train(Saliva_ml_min~ Edad + `14  Diseases of the skin` + A10 + 
+`15 Diseases of musculoskeletal system or connective tissue` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `13DA01.00 Leukoplakia` + R03A + C09B + R06 + `10 Diseases of the ear or mastoid process` + `C10 A` + `13.EA91.40 Non-erosive oral lichen planus` + N06AX + N06A + `B03 B` + C08C + `G04CA 02` + C07 + `A10BD 07` + `A10B D` + A10BA + G04 + Sexo,data=datos_train,
+ method="svmLinear",trControl=control,
+ tuneGrid=SVMgrid,verbose=FALSE)
+
+print(SVM)
+```
+#### Usando BIC
+
+```{r}
+set.seed(123)
+
+control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+
+SVMgrid<-expand.grid(C= c(5^c(-4:2),10))
+
+SVM<- train(Saliva_ml_min~ `14  Diseases of the skin` + A10 + 
+Edad + `15 Diseases of musculoskeletal system or connective tissue` + `6B0Z Anxiety or fear- related disorders, unspecified 3`,data=datos_train,
+ method="svmLinear",trControl=control,
+ tuneGrid=SVMgrid,verbose=FALSE)
+
+print(SVM)
+```
+#### Usanado Boruta
+
+```{r}
+set.seed(123)
+
+control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+
+SVMgrid<-expand.grid(C= c(5^c(-4:2),10))
+
+SVM<- train(Saliva_ml_min~`Nº de fcos` + `11BA00Z Essential Hypertension, unspecified` + `6B0Z Anxiety or fear- related disorders, unspecified 3` + A10 + A10BA + Edad ,data=datos_train,
+ method="svmLinear",trControl=control,
+ tuneGrid=SVMgrid,verbose=FALSE)
+
+print(SVM)
+```
+
+
+### Polinomial
+
+```{r}
+set.seed(123)
+
+
+control <- trainControl(method = "repeatedcv",
+                        number = 10,
+                        repeats = 4,
+                        savePredictions = "all")
+
+SVMpolygrid <- expand.grid(C = c(5^c(-4:2), 10),
+                       degree = c(1, 2, 3),
+                       scale = c(0.1, 0.5, 1, 2, 5))
+
+SVMpoly<- train(Saliva_ml_min~.,data=datos_train,
+   method="svmPoly",trControl=control,
+   tuneGrid=SVMpolygrid,verbose=FALSE)
+
+print(SVMpoly)
+
+
+
+```
+#### Usando SBF
+```{r}
+set.seed(123)
+
+
+control <- trainControl(method = "repeatedcv",
+                        number = 10,
+                        repeats = 4,
+                        savePredictions = "all")
+
+SVMpolygrid <- expand.grid(C = c(5^c(-4:2), 10),
+                       degree = c(1, 2, 3),
+                       scale = c(0.1, 0.5, 1, 2, 5))
+
+SVMpoly<- train(Saliva_ml_min~`Nº de fcos` + `5A10/ 5A11 Diabetes Mellitus 133` +
+`06: Mental, behavioural or neurodevelopmental disorders` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `11 Diseases of circulatory system` + 
+`11BA00Z Essential Hypertension, unspecified` + `13 Diseases of digestive system` + 
+`13DA01.00 Leukoplakia` + `13.EA91.40 Non-erosive oral lichen planus` + 
+`14  Diseases of the skin` + `15 Diseases of musculoskeletal system or connective tissue` + 
+`15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10` + `A: SISTEMA DIGESTIVO Y METABOLISMO` + 
+ A10 + A10B + `A10BD 07` + A12 + `A12 A` + `B01AA 07` + `C: SISTEMA CARDIOVASCULAR` + 
+ C07 + `C07 A` + C09 + `N:SISTEMA NERVIOSO` + N05B + R03A,data=datos_train,
+   method="svmPoly",trControl=control,
+   tuneGrid=SVMpolygrid,verbose=FALSE)
+
+print(SVMpoly)
+
+
+```
+#### Usando AIC
+```{r}
+set.seed(123)
+
+
+control <- trainControl(method = "repeatedcv",
+                        number = 10,
+                        repeats = 4,
+                        savePredictions = "all")
+
+SVMpolygrid <- expand.grid(C = c(5^c(-4:2), 10),
+                       degree = c(1, 2, 3),
+                       scale = c(0.1, 0.5, 1, 2, 5))
+
+SVMpoly<- train(Saliva_ml_min~ Edad + `14  Diseases of the skin` + A10 + 
+`15 Diseases of musculoskeletal system or connective tissue` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `13DA01.00 Leukoplakia` + R03A + C09B + R06 + `10 Diseases of the ear or mastoid process` + `C10 A` + `13.EA91.40 Non-erosive oral lichen planus` + N06AX + N06A + `B03 B` + C08C + `G04CA 02` + C07 + `A10BD 07` + `A10B D` + A10BA + G04 + Sexo,data=datos_train,
+   method="svmPoly",trControl=control,
+   tuneGrid=SVMpolygrid,verbose=FALSE)
+
+print(SVMpoly)
+
+```
+#### Usando BIC
+```{r}
+set.seed(123)
+
+
+control <- trainControl(method = "repeatedcv",
+                        number = 10,
+                        repeats = 4,
+                        savePredictions = "all")
+
+SVMpolygrid <- expand.grid(C = c(5^c(-4:2), 10),
+                       degree = c(1, 2, 3),
+                       scale = c(0.1, 0.5, 1, 2, 5))
+
+SVMpoly<- train(Saliva_ml_min~`14  Diseases of the skin` + A10 + 
+Edad + `15 Diseases of musculoskeletal system or connective tissue` + `6B0Z Anxiety or fear- related disorders, unspecified 3` ,data=datos_train,
+   method="svmPoly",trControl=control,
+   tuneGrid=SVMpolygrid,verbose=FALSE)
+
+print(SVMpoly)
+```
+#### Usando Boruta
+
+```{r}
+set.seed(123)
+
+
+control <- trainControl(method = "repeatedcv",
+                        number = 10,
+                        repeats = 4,
+                        savePredictions = "all")
+
+SVMpolygrid <- expand.grid(C = c(5^c(-4:2), 10),
+                       degree = c(1, 2, 3),
+                       scale = c(0.1, 0.5, 1, 2, 5))
+
+SVMpoly<- train(Saliva_ml_min~ `Nº de fcos` + `11BA00Z Essential Hypertension, unspecified` + `6B0Z Anxiety or fear- related disorders, unspecified 3` + A10 + A10BA + Edad,data=datos_train,
+   method="svmPoly",trControl=control,
+   tuneGrid=SVMpolygrid,verbose=FALSE)
+
+print(SVMpoly)
+
+```
+
+
+### RBF
+
+```{r}
+set.seed(123)
+
+ control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+ 
+SVMrbfgrid<-expand.grid(C= c(5^c(-4:2),10), sigma = 5^c(-3:2))
+
+ 
+SVMrbf<- train(Saliva_ml_min~.,data=datos_train,
+   method="svmRadial",trControl=control,
+   tuneGrid=SVMrbfgrid,verbose=FALSE)
+
+print(SVMrbf)
+
+```
+#### Usando SBF
+
+```{r}
+set.seed(123)
+
+ control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+ 
+SVMrbfgrid<-expand.grid(C= c(5^c(-4:2),10), sigma = 5^c(-3:2))
+
+ 
+SVMrbf<- train(Saliva_ml_min~`Nº de fcos` + `5A10/ 5A11 Diabetes Mellitus 133` +
+`06: Mental, behavioural or neurodevelopmental disorders` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `11 Diseases of circulatory system` + 
+`11BA00Z Essential Hypertension, unspecified` + `13 Diseases of digestive system` + 
+`13DA01.00 Leukoplakia` + `13.EA91.40 Non-erosive oral lichen planus` + 
+`14  Diseases of the skin` + `15 Diseases of musculoskeletal system or connective tissue` + 
+`15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10` + `A: SISTEMA DIGESTIVO Y METABOLISMO` + 
+ A10 + A10B + `A10BD 07` + A12 + `A12 A` + `B01AA 07` + `C: SISTEMA CARDIOVASCULAR` + 
+ C07 + `C07 A` + C09 + `N:SISTEMA NERVIOSO` + N05B + R03A,data=datos_train,
+   method="svmRadial",trControl=control,
+   tuneGrid=SVMrbfgrid,verbose=FALSE)
+
+print(SVMrbf)
+
+```
+#### Usando AIC
+
+```{r}
+set.seed(123)
+
+ control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+ 
+SVMrbfgrid<-expand.grid(C= c(5^c(-4:2),10), sigma = 5^c(-3:2))
+
+ 
+SVMrbf<- train(Saliva_ml_min~ Edad + `14  Diseases of the skin` + A10 + 
+`15 Diseases of musculoskeletal system or connective tissue` + 
+`6B0Z Anxiety or fear- related disorders, unspecified 3` + `13DA01.00 Leukoplakia` + R03A + C09B + R06 + `10 Diseases of the ear or mastoid process` + `C10 A` + `13.EA91.40 Non-erosive oral lichen planus` + N06AX + N06A + `B03 B` + C08C + `G04CA 02` + C07 + `A10BD 07` + `A10B D` + A10BA + G04 + Sexo,data=datos_train,
+   method="svmRadial",trControl=control,
+   tuneGrid=SVMrbfgrid,verbose=FALSE)
+
+print(SVMrbf)
+
+```
+#### Usando BIC
+
+```{r}
+set.seed(123)
+
+ control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+ 
+SVMrbfgrid<-expand.grid(C= c(5^c(-4:2),10), sigma = 5^c(-3:2))
+
+ 
+SVMrbf<- train(Saliva_ml_min~`14  Diseases of the skin` + A10 + 
+Edad + `15 Diseases of musculoskeletal system or connective tissue` + `6B0Z Anxiety or fear- related disorders, unspecified 3`,data=datos_train,
+   method="svmRadial",trControl=control,
+   tuneGrid=SVMrbfgrid,verbose=FALSE)
+
+print(SVMrbf)
+
+```
+#### Usando Boruta
+
+```{r}
+set.seed(123)
+
+ control<-trainControl(method = "repeatedcv",
+   number=10,repeats=4,
+   savePredictions = "all") 
+ 
+SVMrbfgrid<-expand.grid(C= c(5^c(-4:2),10), sigma = 5^c(-3:2))
+
+ 
+SVMrbf<- train(Saliva_ml_min~`Nº de fcos` + `11BA00Z Essential Hypertension, unspecified` + `6B0Z Anxiety or fear- related disorders, unspecified 3` + A10 + A10BA + Edad,data=datos_train,
+   method="svmRadial",trControl=control,
+   tuneGrid=SVMrbfgrid,verbose=FALSE)
+
+print(SVMrbf)
+
+```
+
+
+
+```{r}
+listclass<- c("Sexo", 
+             "2: Neoplasms", "3: Diseases of the blood or blood-forming organs . Diseases of inmune system", 
+             "05: Endocrine, nutricional or metabolic diseases", "5A00.0Z Congenital Hypothyroidism unspecified. 135", 
+             "5A10/ 5A11 Diabetes Mellitus 133", "5B57.Z Vitamine D deficiency unspecified 72", 
+             "5C55.Y Other specified inborn error of purine, pryrimidine or nucleotide metabolism Hyperuricemia  4", 
+             "5C80.0Z Hypercholesterolemia, unspecified (1)", "06: Mental, behavioural or neurodevelopmental disorders", 
+             "6A71.Z Recurrent depressive disorder, unspecified 25", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+             "07: Sleep – wake disorders", "08 Diseases of nervous system", 
+             "09 Diseases of the visual system", "9B10.0Z Age-related cataract, unspecified 57", 
+             "10 Diseases of the ear or mastoid process", "11 Diseases of circulatory system", 
+             "11BA00Z Essential Hypertension, unspecified", "11BC81 Supraventricular tachyarrhythmia   35", 
+             "11BC65Z Cardiac arrhythmia associated with genetic disorder, unspecified  43", 
+             "11BD10Z Congestive heart failure, unspecified  2", "11BD74.Z Cronic Peripheral venous insufficiency of lower extremities, unspecified  76", 
+             "12 Diseases of respiratory system", "12CA23.0Z Allergic asthma, unspecified  28", 
+             "13 Diseases of digestive system", "13DA01.00 Leukoplakia", "13.EA91.40 Non-erosive oral lichen planus", 
+             "14  Diseases of the skin", "15 Diseases of musculoskeletal system or connective tissue", 
+             "15FA25.0 Primary Gout 24", "15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10", 
+             "15FB83.11 Postmenopausal osteoporosis 8", "16      Diseases of the genitourinary system", 
+             "16GA91.Z Inflammatory and other diseases of prostate, unspecified  9 ( hiperplasia benigna de próstata.", 
+             "21 Symptoms, signs or clinical findings not elsewhere classified", 
+             "A: SISTEMA DIGESTIVO Y METABOLISMO", "A02", "A02B", "A02B C", 
+             "A02BC 01", "A02BC02", "A10", "A10B", "A10BA", "A10BA02", "A10B D", 
+             "A10BD 07", "A11", "A11C", "A11C C", "A11CC05", "A11CC 06", "A12", 
+             "A12 A", "A12AX P1", "B: SANGRE Y ÓRGANOS HEMATOPOYÉTICOS", 
+             "B01", "B01A", "B01AA 07", "B01A C", "B01AC 06", "B03", "B03 B", 
+             "B03B A", "B03BA01", "C: SISTEMA CARDIOVASCULAR", "C01", "C02", 
+             "C02C", "C02C A", "C02CA04", "C03", "C03 C", "C03C A", "C03 E", 
+             "C03E B", "C03EB01", "C07", "C07 A", "C07A B", "C07AB 03", "C07AB07", 
+             "C07B", "C08", "C08C", "C08C A", "C08CA01", "C09", "C09A", "C09A A", 
+             "C09AA02", "C09AA 03", "C09B", "C09B A", "C09BA02", "C09BA 03", 
+             "C09 C", "C09CA", "C09CA 01", "C09D", "C09D A", "C09DA 08", "C09D B", 
+             "C09DB 01", "C09DB 02", "C09DB06", "C09D X", "C09DX 03", "C10", 
+             "C10 A", "C10A A", "C10AA 01", "C10AA 05", "C10AA 07", "C10 B", 
+             "C10B A", "D:MEDICAMENTOS DERMATOLÓGICOS", "G: APARATO GENITOURINARIO Y HORMONAS SEXUALES", 
+             "G04", "G04C", "G04CA", "G04CA 02", "H: PREPARADOS HORMONALES SISTÉMICOS, EXCL. HORMONAS SEXUALES", 
+             "H03AA 01", "M: SISTEMA MUSCULOESQUELÉTICO", "M01", "M01A", 
+             "M01AX", "M04", "M04A", "M04AA", "M04AA 01", "N:SISTEMA NERVIOSO", 
+             "N02", "N02 A", "N02A J", "N02 B", "N02B B", "N02BB 02", "N02B E", 
+             "N02BE 01", "N03", "N03A", "N03A X", "N05", "N05B", "N05BA", 
+             "N05BA 06", "N05BA08", "N05C", "N06", "N06A", "N06AB", "N06AB 06", 
+             "N06AX", "R: SISTEMA RESPIRATORIO", "R03", "R03A", "R06", "R06A", 
+             "R06AX", "S: ÓRGANOS DE LOS SENTIDOS", "S01", "S01E", "S01ED")
+
+listconti <-c("Nº enfermedades sistemicas", "Nº de fcos", "Edad")
+
+```
+
+
+
+# Comparación de modelos
+
+```{r}
+source("cruzadas avnnet y lin.R")
+source("cruzada rf continua.R")
+source("cruzada gbm continua.R")
+source("cruzada SVM continua lineal.R")
+source("cruzada SVM continua polinomial.R")
+source("cruzada SVM continua RBF.R")
+
+data<-datos_train
+
+
+medias1<-cruzadalin(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "5A10/ 5A11 Diabetes Mellitus 133", 
+                        "06: Mental, behavioural or neurodevelopmental disorders", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11 Diseases of circulatory system", 
+                        "11BA00Z Essential Hypertension, unspecified", 
+                        "13 Diseases of digestive system", "13DA01.00 Leukoplakia", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "14  Diseases of the skin", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10", 
+                        "A: SISTEMA DIGESTIVO Y METABOLISMO", "A10", "A10B", "A10BD 07", "A12", "A12 A",                          "B01AA 07", "C: SISTEMA CARDIOVASCULAR", "C07", "C07 A", "C09", 
+                        "N:SISTEMA NERVIOSO", "N05B", "R03A"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25)
+
+medias1$modelo="SBF"
+
+medias2<-cruzadalin(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "13DA01.00 Leukoplakia", "R03A", "C09B", "R06", 
+                        "10 Diseases of the ear or mastoid process", "C10 A", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "N06AX", "N06A", "B03 B",                                  "C08C", "G04CA 02", "C07", "A10BD 07", "A10B D", "A10BA", "G04", "Sexo"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25)
+
+medias2$modelo="STEPAIC"
+
+
+medias3<-cruzadalin(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25)
+
+medias3$modelo="STEPBIC"
+
+
+medias4<-cruzadalin(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25)
+
+medias4$modelo="Boruta"
+
+
+medias5<-cruzadarf(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,mtry=1,ntree=500,nodesize=10)
+
+
+medias5$modelo="Random forest"
+
+
+
+medias6<- cruzadagbm(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,n.minobsinnode=10,shrinkage=0.1,
+                    interaction.depth=2,n.trees=5  )
+
+
+medias6$modelo="Gradient Boosting"
+
+
+medias7 <- cruzadaSVM(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "5A10/ 5A11 Diabetes Mellitus 133", 
+                        "06: Mental, behavioural or neurodevelopmental disorders", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11 Diseases of circulatory system", 
+                        "11BA00Z Essential Hypertension, unspecified", 
+                        "13 Diseases of digestive system", "13DA01.00 Leukoplakia", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "14  Diseases of the skin", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10", 
+                        "A: SISTEMA DIGESTIVO Y METABOLISMO", "A10", "A10B", "A10BD 07", "A12", "A12 A",                          "B01AA 07", "C: SISTEMA CARDIOVASCULAR", "C07", "C07 A", "C09", 
+                        "N:SISTEMA NERVIOSO", "N05B", "R03A"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25, C=0.0016)
+
+medias7$modelo="SVM Lineal SBF"
+
+
+medias8 <- cruzadaSVM(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "13DA01.00 Leukoplakia", "R03A", "C09B", "R06", 
+                        "10 Diseases of the ear or mastoid process", "C10 A", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "N06AX", "N06A", "B03 B",                                  "C08C", "G04CA 02", "C07", "A10BD 07", "A10B D", "A10BA", "G04", "Sexo"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25, C=0.008)
+
+medias8$modelo="SVM Lineal AIC"
+
+
+medias9 <- cruzadaSVM(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25, C=0.008)
+
+medias9$modelo="SVM Lineal BIC"
+
+
+medias10 <- cruzadaSVM(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25, C=25)
+
+medias10$modelo="SVM Lineal Boruta"
+
+
+medias11 <- cruzadaSVMpoly(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "5A10/ 5A11 Diabetes Mellitus 133", 
+                        "06: Mental, behavioural or neurodevelopmental disorders", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11 Diseases of circulatory system", 
+                        "11BA00Z Essential Hypertension, unspecified", 
+                        "13 Diseases of digestive system", "13DA01.00 Leukoplakia", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "14  Diseases of the skin", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10", 
+                        "A: SISTEMA DIGESTIVO Y METABOLISMO", "A10", "A10B", "A10BD 07", "A12", "A12 A",                          "B01AA 07", "C: SISTEMA CARDIOVASCULAR", "C07", "C07 A", "C09", 
+                        "N:SISTEMA NERVIOSO", "N05B", "R03A"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=0.0016,scale=2,degree=1)
+
+medias11$modelo="SVM Polinomial SBF"
+
+
+medias12 <- cruzadaSVMpoly(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "13DA01.00 Leukoplakia", "R03A", "C09B", "R06", 
+                        "10 Diseases of the ear or mastoid process", "C10 A", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "N06AX", "N06A", "B03 B",                                  "C08C", "G04CA 02", "C07", "A10BD 07", "A10B D", "A10BA", "G04", "Sexo"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=0.0016,scale=5,degree=1)
+
+medias12$modelo="SVM Polinomial AIC"
+
+
+medias13 <- cruzadaSVMpoly(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=0.2,scale=0.1,degree=1)
+
+medias13$modelo="SVM Polinomial BIC"
+
+
+medias14 <- cruzadaSVMpoly(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=10,scale=1,degree=1)
+
+medias14$modelo="SVM Polinomial Boruta"
+
+
+medias15 <- cruzadaSVMRBF(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "5A10/ 5A11 Diabetes Mellitus 133", 
+                        "06: Mental, behavioural or neurodevelopmental disorders", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11 Diseases of circulatory system", 
+                        "11BA00Z Essential Hypertension, unspecified", 
+                        "13 Diseases of digestive system", "13DA01.00 Leukoplakia", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "14  Diseases of the skin", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "15 FA0Z Osteoarthritis, unspecified . Arthrosis. 10", 
+                        "A: SISTEMA DIGESTIVO Y METABOLISMO", "A10", "A10B", "A10BD 07", "A12", "A12 A",                          "B01AA 07", "C: SISTEMA CARDIOVASCULAR", "C07", "C07 A", "C09", 
+                        "N:SISTEMA NERVIOSO", "N05B", "R03A"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=0.2,sigma=0.008)
+
+medias15$modelo="SVM Radial SBF"
+
+
+medias16 <- cruzadaSVMRBF(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "13DA01.00 Leukoplakia", "R03A", "C09B", "R06", 
+                        "10 Diseases of the ear or mastoid process", "C10 A", 
+                        "13.EA91.40 Non-erosive oral lichen planus", "N06AX", "N06A", "B03 B",                                  "C08C", "G04CA 02", "C07", "A10BD 07", "A10B D", "A10BA", "G04", "Sexo"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=1,sigma=0.008)
+
+medias16$modelo="SVM Radial AIC"
+
+
+medias17 <- cruzadaSVMRBF(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Edad", "14  Diseases of the skin", "A10", 
+                        "15 Diseases of musculoskeletal system or connective tissue", 
+                        "6B0Z Anxiety or fear- related disorders, unspecified 3"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=1,sigma=0.008)
+
+medias17$modelo="SVM Radial BIC"
+
+
+medias18 <- cruzadaSVMRBF(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=1,sigma=0.008)
+
+medias18$modelo="SVM Radial Boruta"
+
+
+
+
+```
+
+## Representación gráfica
+
+
+```{r}
+union1<-rbind(medias1,medias2,medias3,medias4)
+
+par(cex.axis=0.7)
+boxplot(data=union1,error~modelo,main="RMSE",col="pink")
+
+
+
+```
+
+```{r}
+union1<-rbind(medias1,medias2,medias3,medias4,medias5,
+              medias6)
+
+par(cex.axis=0.7)
+boxplot(data=union1,error~modelo,main="RMSE",col="pink")
+
+
+
+```
+
+```{r}
+union2<-rbind(medias7,medias8,medias9,medias10)
+par(cex.axis=0.8)
+boxplot(data=union2,error~modelo,main="RMSE",col="pink")
+
+```
+```{r}
+union3<-rbind(medias11,medias12,medias13,medias14)
+par(cex.axis=0.6)
+boxplot(data=union3,error~modelo,main="RMSE",col="pink")
+```
+```{r}
+union4<-rbind(medias15,medias16,medias17,medias18)
+par(cex.axis=0.6)
+boxplot(data=union4,error~modelo,main="RMSE",col="pink")
+
+```
+```{r}
+union5<-rbind(medias10,medias14,medias18)
+par(cex.axis=0.6)
+boxplot(data=union5,error~modelo,main="RMSE",col="pink")
+
+```
+
+
+# Ensamblar modelos
+
+```{r}
+source("cruzadas ensamblado continuas fuente.R")
+
+
+medias1en<-cruzadalin(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25)
+
+medias1bis<-as.data.frame(medias1en[1])
+medias1bis$modelo<-"regresion"
+predi1<-as.data.frame(medias1en[2])
+predi1$regresion<-predi1$pred
+
+
+
+
+
+medias2en<-cruzadarf(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,mtry=1,ntree=500,nodesize=10)
+
+
+medias2bis<-as.data.frame(medias2en[1])
+medias2bis$modelo<-"rf"
+predi2<-as.data.frame(medias2en[2])
+predi2$rf<-predi2$pred
+
+
+
+
+medias3en<- cruzadagbm(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,n.minobsinnode=10,shrinkage=0.1,
+                    interaction.depth=2,n.trees=5)
+
+medias3bis<-as.data.frame(medias3en[1])
+medias3bis$modelo<-"gbm"
+predi3<-as.data.frame(medias3en[2])
+predi3$gbm<-predi3$pred
+
+
+
+
+medias4en <- cruzadaSVMRBF(data=data,
+                    vardep="Saliva_ml_min",listconti=
+                      c("Nº de fcos", "6B0Z Anxiety or fear- related disorders, unspecified 3", 
+                        "11BA00Z Essential Hypertension, unspecified", "A10", "A10BA", "Edad"),
+                    listclass=c(""),grupos=4,sinicio=1234,repe=25,C=1,sigma=0.008)
+
+medias4bis<-as.data.frame(medias4en[1])
+medias4bis$modelo<-"SVM"
+predi4<-as.data.frame(medias4en[2])
+predi4$SVM<-predi4$pred
+
+
+```
+
+```{r}
+union6<-rbind(medias1bis,medias2bis,
+ medias3bis,medias4bis)
+
+par(cex.axis=0.7)
+boxplot(data=union6,error~modelo, col="pink")
+```
+
+```{r}
+
+unipredi<-cbind(predi1,predi2,predi3,predi4)
+
+unipredi<- unipredi[, !duplicated(colnames(unipredi))]
+
+
+unipredi$predi9<-(unipredi$regresion+unipredi$SVM)/2
+unipredi$predi10<-(unipredi$regresion+unipredi$rf)/2
+unipredi$predi11<-(unipredi$regresion+unipredi$gbm)/2
+unipredi$predi16<-(unipredi$SVM+unipredi$rf)/2
+unipredi$predi17<-(unipredi$SVM+unipredi$gbm)/2
+unipredi$predi22<-(unipredi$rf+unipredi$gbm)/2
+
+unipredi$predi31<-(unipredi$regresion+unipredi$SVM+unipredi$rf)/3
+unipredi$predi32<-(unipredi$regresion+unipredi$SVM+unipredi$gbm)/3
+unipredi$predi37<-(unipredi$regresion+unipredi$rf+unipredi$SVM)/3
+unipredi$predi56<-(unipredi$rf+unipredi$SVM+unipredi$gbm)/3
+
+unipredi$predi64<-(unipredi$regresion+unipredi$rf+unipredi$gbm+unipredi$SVM)/4
+
+dput(names(unipredi))
+
+```
+
+```{r}
+listado <- c(  "predi9", "predi10", "predi11", "predi16", 
+"predi17", "predi22", "predi31", "predi32", "predi37", "predi56", 
+"predi64")
+```
+
+
+```{r}
+repeticiones<-nlevels(factor(unipredi$Rep))
+unipredi$Rep<-as.factor(unipredi$Rep)
+unipredi$Rep<-as.numeric(unipredi$Rep)
+```
+
+
+```{r}
+medias0<-data.frame(c())
+
+for (prediccion in listado)
+{
+paso <-unipredi[,c("obs",prediccion,"Rep")]
+paso$error<-(paso[,c(prediccion)]-paso$obs)^2
+paso<-paso %>%
+  group_by(Rep) %>%
+  summarize(error=mean(error))     
+paso$modelo<-prediccion  
+medias0<-rbind(medias0,paso) 
+} 
+
+
+par(cex.axis=0.8,las=2)
+boxplot(data=medias0,outcex=0.3,error~modelo)
+
+
+
+tablamedias<-medias0 %>%
+    summarize(error=mean(error))     
+
+
+```
+
+
+```{r}
+medias0$modelo <- with(medias0,
+ reorder(modelo,error, mean))
+par(cex.axis=0.7,las=2)
+boxplot(data=medias0,error~modelo,col="pink")
+
+```
+
+
+
+```{r}
+listado <- c( "regresion", "rf", "gbm", "SVM", "predi9", "predi10", "predi11", "predi16", 
+"predi17", "predi22", "predi31", "predi32", "predi37", "predi56", 
+"predi64")
+```
+
+
+
+```{r}
+repeticiones<-nlevels(factor(unipredi$Rep))
+unipredi$Rep<-as.factor(unipredi$Rep)
+unipredi$Rep<-as.numeric(unipredi$Rep)
+```
+
+```{r}
+medias0<-data.frame(c())
+
+for (prediccion in listado)
+{
+paso <-unipredi[,c("obs",prediccion,"Rep")]
+paso$error<-(paso[,c(prediccion)]-paso$obs)^2
+paso<-paso %>%
+  group_by(Rep) %>%
+  summarize(error=mean(error))     
+paso$modelo<-prediccion  
+medias0<-rbind(medias0,paso) 
+} 
+
+
+par(cex.axis=0.8,las=2)
+boxplot(data=medias0,outcex=0.3,error~modelo)
+
+
+
+tablamedias<-medias0 %>%
+    summarize(error=mean(error))     
+
+tablamedias<-tablamedias[order(tablamedias$error),]
+```
+
+```{r}
+medias0$modelo <- with(medias0,
+ reorder(modelo,error, mean))
+par(cex.axis=0.7,las=2)
+boxplot(data=medias0,error~modelo,col="pink")
+
+
+```
+
+
+
+
+# Predicción
+
+Regresión lineal
+
+```{r}
+prediccion_lineal <- predict(modeloboruta, newdata = datos_test)
+
+mse_lineal <- mean((datos_test$Saliva_ml_min - prediccion_lineal)^2)
+
+print(prediccion_lineal)
+
+```
+
+Random forest
+
+```{r}
+
+prediccion_RF <- predict(rf, newdata = datos_test)
+
+mse_rf <- mean((datos_test$Saliva_ml_min - prediccion_RF)^2)
+
+
+print(prediccion_RF)
+
+```
+Predicción Gradient Boosting
+
+```{r}
+prediccion_GB <- predict(gbm, newdata = datos_test, n.trees = best.iter)
+
+mse_GB <- mean((datos_test$Saliva_ml_min - prediccion_GB)^2)
+
+print(prediccion_GB)
+```
+
+Predicción Support Vector Machine
+
+```{r}
+prediccion_SVM <- predict(SVMrbf, newdata = datos_test)
+
+mse_SVM <- mean((datos_test$Saliva_ml_min - prediccion_SVM)^2)
+
+print(prediccion_SVM)
+
+```
+
+## Comparación de predicciones
+
+```{r}
+mse_values <- c(mse_rf, mse_lineal, mse_GB, mse_SVM)
+model_names <- c("Random Forest", "Regresión Lineal", "Gradient Boosting", "Support Vector Machine")
+
+# Imprimir los MSE
+cat("MSE para cada modelo:\n")
+for (i in seq_along(mse_values)) {
+  cat(model_names[i], ": ", mse_values[i], "\n")
+}
+
+# Identificar el modelo con el menor MSE
+best_model <- model_names[which.min(mse_values)]
+cat("\nEl mejor modelo es:", best_model, "con un MSE de", min(mse_values))
+```
+
